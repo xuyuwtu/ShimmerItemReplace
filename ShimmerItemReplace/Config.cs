@@ -1,5 +1,4 @@
 ﻿using Newtonsoft.Json;
-using System.Security.Cryptography.Pkcs;
 using Terraria;
 using Terraria.ID;
 
@@ -44,8 +43,8 @@ public class TransformInfo
 }
 public class RecipeInfo
 {
-    [JsonIgnore]
-    public int RecipeId;
+    [JsonProperty("pg")]
+    public byte progress = 0;
     public ItemInfo createItem = new();
     public ItemInfo[] requiredItems = Array.Empty<ItemInfo>();
     public bool crimson = false;
@@ -53,40 +52,24 @@ public class RecipeInfo
     public static readonly int numRecipes = Recipe.numRecipes;
     private void AddRecipe()
     {
-        var currentRecipe = Recipe.currentRecipe;
-        currentRecipe.createItem.SetDefaults(createItem.type);
-        currentRecipe.createItem.stack = createItem.stack;
-        for (int i = 0; i < Math.Min(Recipe.maxRequirements, requiredItems.Length); i++) 
+        if (Recipe.numRecipes == Recipe.maxRecipes)
         {
-            currentRecipe.requiredItem[i].SetDefaults(requiredItems[i].type);
-            currentRecipe.requiredItem[i].stack = requiredItems[i].stack;
+            return;
         }
-        currentRecipe.crimson = crimson;
-        currentRecipe.corruption = corruption;
-        RecipeId = Recipe.numRecipes;
+        ChangeRecipe(Recipe.currentRecipe);
         Recipe.AddRecipe();
-        Console.WriteLine($"add type:{createItem.type} RecipeId:{RecipeId}");
     }
     private void ModifyRecipe(int decraftingRecipeIndex)
     {
         var recipe = Main.recipe[decraftingRecipeIndex];
-        recipe.createItem.SetDefaults(createItem.type);
-        recipe.createItem.stack = createItem.stack;
-        var setCount = Math.Min(Recipe.maxRequirements, requiredItems.Length);
-        for (int i = 0; i < setCount; i++)
-        {
-            recipe.requiredItem[i].SetDefaults(requiredItems[i].type);
-            recipe.requiredItem[i].stack = requiredItems[i].stack;
-        }
-        for (int i = setCount; i < Recipe.maxRequirements; i++)
+        ChangeRecipe(recipe);
+        for (int i = Math.Min(Recipe.maxRequirements, requiredItems.Length); i < Recipe.maxRequirements; i++)
         {
             if (recipe.requiredItem[i].type != 0)
             {
                 recipe.requiredItem[i] = new Item();
             }
         }
-        RecipeId = decraftingRecipeIndex;
-        Console.WriteLine($"modify type:{createItem.type} RecipeId:{RecipeId}");
     }
     public void UpdateRecipe()
     {
@@ -101,7 +84,7 @@ public class RecipeInfo
             if (crimson)
             {
                 decraftingRecipeIndex = ItemID.Sets.IsCraftedCrimson[createItem.type];
-                if (decraftingRecipeIndex == -1) 
+                if (decraftingRecipeIndex == -1)
                 {
                     AddRecipe();
                     add = true;
@@ -112,7 +95,7 @@ public class RecipeInfo
                 decraftingRecipeIndex = ItemID.Sets.IsCraftedCorruption[createItem.type];
                 if (decraftingRecipeIndex == -1)
                 {
-                    if (!crimson)
+                    if (!add)
                     {
                         AddRecipe();
                         add = true;
@@ -124,6 +107,18 @@ public class RecipeInfo
                 ModifyRecipe(decraftingRecipeIndex);
             }
         }
+    }
+    private void ChangeRecipe(Recipe recipe)
+    {
+        recipe.createItem.SetDefaults(createItem.type);
+        recipe.createItem.stack = createItem.stack;
+        for (int i = 0; i < Math.Min(Recipe.maxRequirements, requiredItems.Length); i++)
+        {
+            recipe.requiredItem[i].SetDefaults(requiredItems[i].type);
+            recipe.requiredItem[i].stack = requiredItems[i].stack;
+        }
+        recipe.crimson = crimson;
+        recipe.corruption = corruption;
     }
 }
 public class ItemInfo

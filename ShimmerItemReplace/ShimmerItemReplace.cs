@@ -56,7 +56,7 @@ public class ShimmerItemReplace : TerrariaPlugin
     };
     private bool AddToReload = false;
     private Command Command;
-    public ShimmerItemReplace(Main game) : base(game) 
+    public ShimmerItemReplace(Main game) : base(game)
     {
         Command = new Command("sirc", Cmd, "sirc");
         try
@@ -82,7 +82,7 @@ public class ShimmerItemReplace : TerrariaPlugin
                     AddToReload = true;
                     TShockAPI.Hooks.GeneralHooks.ReloadEvent += OnReload;
                 }
-                foreach(var info in config.Replace)
+                foreach (var info in config.Replace)
                 {
                     if (info.clear)
                     {
@@ -100,9 +100,14 @@ public class ShimmerItemReplace : TerrariaPlugin
                         }
                     }
                 }
-                for (int i = 0; i < Math.Min(config.Recipe.Length, 15); i++)
+                for (int i = 0; i < Math.Min(config.Recipe.Length, Recipe.maxRequirements); i++)
                 {
-                    config.Recipe[i].UpdateRecipe();
+                    var recipeInfo = config.Recipe[i];
+                    recipeInfo.UpdateRecipe();
+                    if (recipeInfo.progress >= 0 && recipeInfo.progress < DownedFuncs.Length)
+                    {
+                        CanShimmerFuncs[recipeInfo.createItem.type] = DownedFuncs[recipeInfo.progress];
+                    }
                 }
                 Recipe.UpdateWhichItemsAreCrafted();
                 Console.WriteLine("当前配方数:{0}", Recipe.numRecipes - 1);
@@ -151,6 +156,7 @@ public class ShimmerItemReplace : TerrariaPlugin
                 ply.SendErrorMessage("配置文件转换失败");
                 return;
             }
+
             foreach (var info in config.Replace)
             {
                 if (info.clear)
@@ -177,15 +183,18 @@ public class ShimmerItemReplace : TerrariaPlugin
                     }
                 }
             }
-            RecipeGroup.recipeGroups.Clear();
-            RecipeGroup.recipeGroupIDs.Clear();
-            Recipe.numRecipes = 0;
-            Recipe.SetupRecipes();
-            for (int i = 0; i < Math.Min(config.Recipe.Length, 15); i++) 
+
+            for (int i = 0; i < Math.Min(config.Recipe.Length, Recipe.maxRequirements); i++)
             {
-                config.Recipe[i].UpdateRecipe();
+                var recipeInfo = config.Recipe[i];
+                recipeInfo.UpdateRecipe();
+                if (recipeInfo.progress >= 0 && recipeInfo.progress < DownedFuncs.Length)
+                {
+                    CanShimmerFuncs[recipeInfo.createItem.type] = DownedFuncs[recipeInfo.progress];
+                }
             }
             Recipe.UpdateWhichItemsAreCrafted();
+
             ply.SendInfoMessage("加载完成");
             ply.SendInfoMessage("当前配方数:{0}", Recipe.numRecipes - 1);
         }
@@ -196,9 +205,29 @@ public class ShimmerItemReplace : TerrariaPlugin
             return;
         }
     }
+    private static void Reset(TSPlayer? ply)
+    {
+        ItemID.Sets.ShimmerTransformToItem = (int[])DefaultShimmerTransformToItem.Clone();
+        Array.Fill(CanShimmerFuncs, null);
+
+        Array.Fill(ItemID.Sets.IsCrafted, -1);
+        Array.Fill(ItemID.Sets.IsCraftedCrimson, -1);
+        Array.Fill(ItemID.Sets.IsCraftedCorruption, -1);
+        RecipeGroup.recipeGroups.Clear();
+        RecipeGroup.recipeGroupIDs.Clear();
+        Recipe.numRecipes = 0;
+        Recipe.SetupRecipes();
+
+        ply?.SendInfoMessage("重置完成");
+    }
+    private static void Reload(TSPlayer ply, bool detailed = false)
+    {
+        Reset(null);
+        Load(ply, detailed);
+    }
     private void Cmd(CommandArgs args)
     {
-        if(args.Parameters.Count == 0)
+        if (args.Parameters.Count == 0)
         {
             args.Player.SendInfoMessage(
                 "/{0} reset 重置微光变换为默认值\n" +
@@ -206,21 +235,16 @@ public class ShimmerItemReplace : TerrariaPlugin
                 "/{0} reload 重置并加载", Command.Name);
             return;
         }
-        switch(args.Parameters[0]) 
+        switch (args.Parameters[0])
         {
             case "reset":
-                ItemID.Sets.ShimmerTransformToItem = (int[])DefaultShimmerTransformToItem.Clone();
-                Array.Fill(CanShimmerFuncs, null);
-                args.Player.SendInfoMessage("重置完成");
+                Reset(args.Player);
                 break;
             case "load":
                 Load(args.Player, args.Parameters.Count > 1 && args.Parameters[1] == "-d");
                 break;
             case "reload":
-                ItemID.Sets.ShimmerTransformToItem = (int[])DefaultShimmerTransformToItem.Clone();
-                Array.Fill(CanShimmerFuncs, null);
-                args.Player.SendInfoMessage("重置完成");
-                Load(args.Player, args.Parameters.Count > 1 && args.Parameters[1] == "-d");
+                Reload(args.Player, args.Parameters.Count > 1 && args.Parameters[1] == "-d");
                 break;
             default:
                 args.Player.SendErrorMessage("未知参数:{0}", args.Parameters[0]);
@@ -361,7 +385,7 @@ public class ShimmerItemReplace : TerrariaPlugin
             //item.shimmered = true;
             var oldstack = item.stack;
             item.SetDefaults(ItemID.Sets.ShimmerTransformToItem[shimmerEquivalentType]);
-            if(oldstack > item.maxStack)
+            if (oldstack > item.maxStack)
             {
                 item.stack = item.maxStack;
                 Main.item[Item.NewItem(null, item.Center, item.velocity, shimmerEquivalentType, oldstack - item.maxStack)].shimmered = true;
@@ -421,7 +445,7 @@ public class ShimmerItemReplace : TerrariaPlugin
         }
         else if (decraftingRecipeIndex >= 0)
         {
-            int num13 = item.FindDecraftAmount();
+            int decraftAmount = item.FindDecraftAmount();
             Recipe recipe = Main.recipe[decraftingRecipeIndex];
             int num14 = 0;
             bool flag = recipe.requiredItem[1].stack > 0;
@@ -431,39 +455,39 @@ public class ShimmerItemReplace : TerrariaPlugin
                 enumerable = recipe.customShimmerResults;
             }
             int num15 = 0;
-            foreach (Item item2 in enumerable)
+            foreach (Item requiredItem in enumerable)
             {
-                if (item2.type <= 0)
+                if (requiredItem.type <= 0)
                 {
                     break;
                 }
                 num15++;
-                int num16 = num13 * item2.stack;
+                int needSpawnStack = decraftAmount * requiredItem.stack;
                 if (recipe.alchemy)
                 {
-                    for (int num17 = num16; num17 > 0; num17--)
+                    for (int num17 = needSpawnStack; num17 > 0; num17--)
                     {
                         if (Main.rand.Next(3) == 0)
                         {
-                            num16--;
+                            needSpawnStack--;
                         }
                     }
                 }
-                while (num16 > 0)
+                while (needSpawnStack > 0)
                 {
-                    int num18 = num16;
+                    int stack = needSpawnStack;
                     //if (stack > 9999)
                     //{
                     //    stack = 9999;
                     //}
-                    if(num18 > item2.maxStack)
+                    if (stack > requiredItem.maxStack)
                     {
-                        num18 = item2.maxStack;
+                        stack = requiredItem.maxStack;
                     }
-                    num16 -= num18;
-                    int num19 = Item.NewItem(item.GetItemSource_Misc(8), (int)item.position.X, (int)item.position.Y, item.width, item.height, item2.type);
-                    Item newItem = Main.item[num19];
-                    newItem.stack = num18;
+                    needSpawnStack -= stack;
+                    int newItemIndex = Item.NewItem(item.GetItemSource_Misc(8), (int)item.position.X, (int)item.position.Y, item.width, item.height, requiredItem.type);
+                    Item newItem = Main.item[newItemIndex];
+                    newItem.stack = stack;
                     newItem.shimmerTime = 1f;
                     newItem.shimmered = true;
                     newItem.shimmerWet = true;
@@ -479,10 +503,10 @@ public class ShimmerItemReplace : TerrariaPlugin
                             newItem.velocity.X *= -1f;
                         }
                     }
-                    NetMessage.SendData(MessageID.SyncItemsWithShimmer, -1, -1, null, num19, 1f);
+                    NetMessage.SendData(MessageID.SyncItemsWithShimmer, -1, -1, null, newItemIndex, 1f);
                 }
             }
-            item.stack -= num13 * recipe.createItem.stack;
+            item.stack -= decraftAmount * recipe.createItem.stack;
             if (item.stack <= 0)
             {
                 item.stack = 0;
