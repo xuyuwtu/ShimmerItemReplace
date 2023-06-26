@@ -13,7 +13,7 @@ public class ShimmerItemReplace : TerrariaPlugin
 {
     public override string Name => "ShimmerItemReplace";
     public override string Author => "yu";
-    public override Version Version => new(1, 0);
+    public override Version Version => new(1, 1);
     public override string Description => "修改微光变换的物品";
     internal MonoMod.RuntimeDetour.Detour? CanShimmerDetour, GetShimmeredDetour;
     public static readonly int[] DefaultShimmerTransformToItem = (int[])ItemID.Sets.ShimmerTransformToItem.Clone();
