@@ -84,22 +84,37 @@ public class ShimmerItemReplace : TerrariaPlugin
                 }
                 foreach(var info in config.Replace)
                 {
-                    if (info.destType != -1)
+                    if (info.clear)
                     {
-                        ItemID.Sets.ShimmerTransformToItem[info.srcType] = info.destType;
+                        ItemID.Sets.ShimmerTransformToItem[info.srcType] = -1;
                     }
-                    if(info.progress >= 0 &&  info.progress < DownedFuncs.Length)
+                    else
                     {
-                        CanShimmerFuncs[info.srcType] = DownedFuncs[info.progress];
+                        if (info.destType != -1)
+                        {
+                            ItemID.Sets.ShimmerTransformToItem[info.srcType] = info.destType;
+                        }
+                        if (info.progress >= 0 && info.progress < DownedFuncs.Length)
+                        {
+                            CanShimmerFuncs[info.srcType] = DownedFuncs[info.progress];
+                        }
                     }
                 }
+                for (int i = 0; i < Math.Min(config.Recipe.Length, 15); i++)
+                {
+                    config.Recipe[i].UpdateRecipe();
+                }
+                Recipe.UpdateWhichItemsAreCrafted();
+                Console.WriteLine("当前配方数:{0}", Recipe.numRecipes - 1);
                 Command = new Command(config.CommandPermission, Cmd, config.CommandNames);
             }
         }
         catch (Exception ex)
         {
-            TSPlayer.Server.SendErrorMessage(ex.ToString());
-            TShock.Log.Error(ex.ToString());
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine(ex.ToString());
+            Console.ResetColor();
+            Console.ReadKey();
         }
     }
     public override void Initialize()
@@ -138,24 +153,41 @@ public class ShimmerItemReplace : TerrariaPlugin
             }
             foreach (var info in config.Replace)
             {
-                if (info.destType != -1)
+                if (info.clear)
                 {
-                    ItemID.Sets.ShimmerTransformToItem[info.srcType] = info.destType;
-                    if (detailed)
+                    ItemID.Sets.ShimmerTransformToItem[info.srcType] = -1;
+                }
+                else
+                {
+                    if (info.destType != -1)
                     {
-                        ply.SendInfoMessage($"Shimmer:{Lang.GetItemNameValue(info.srcType)} => {Lang.GetItemNameValue(info.destType)}");
+                        ItemID.Sets.ShimmerTransformToItem[info.srcType] = info.destType;
+                        if (detailed)
+                        {
+                            ply.SendInfoMessage($"Shimmer:{Lang.GetItemNameValue(info.srcType)} => {Lang.GetItemNameValue(info.destType)}");
+                        }
+                    }
+                    if (info.progress >= 0 && info.progress < DownedFuncs.Length)
+                    {
+                        CanShimmerFuncs[info.srcType] = DownedFuncs[info.progress];
+                    }
+                    else if (detailed)
+                    {
+                        ply.SendInfoMessage("无效progress值:{0}", info.progress);
                     }
                 }
-                if (info.progress >= 0 && info.progress < DownedFuncs.Length)
-                {
-                    CanShimmerFuncs[info.srcType] = DownedFuncs[info.progress];
-                }
-                else if(detailed)
-                {
-                    ply.SendInfoMessage("无效progress值:{0}", info.progress);
-                }
             }
+            RecipeGroup.recipeGroups.Clear();
+            RecipeGroup.recipeGroupIDs.Clear();
+            Recipe.numRecipes = 0;
+            Recipe.SetupRecipes();
+            for (int i = 0; i < Math.Min(config.Recipe.Length, 15); i++) 
+            {
+                config.Recipe[i].UpdateRecipe();
+            }
+            Recipe.UpdateWhichItemsAreCrafted();
             ply.SendInfoMessage("加载完成");
+            ply.SendInfoMessage("当前配方数:{0}", Recipe.numRecipes - 1);
         }
         catch (Exception ex)
         {
@@ -298,8 +330,7 @@ public class ShimmerItemReplace : TerrariaPlugin
         //}
         else if (shimmerEquivalentType == ItemID.LunarBrick)
         {
-            short num5 = 3461;
-            num5 = Main.GetMoonPhase() switch
+            short num5 = Main.GetMoonPhase() switch
             {
                 MoonPhase.QuarterAtRight => ItemID.StarRoyaleBrick,
                 MoonPhase.HalfAtRight => ItemID.CryocoreBrick,
@@ -421,9 +452,13 @@ public class ShimmerItemReplace : TerrariaPlugin
                 while (num16 > 0)
                 {
                     int num18 = num16;
-                    if (num18 > 9999)
+                    //if (stack > 9999)
+                    //{
+                    //    stack = 9999;
+                    //}
+                    if(num18 > item2.maxStack)
                     {
-                        num18 = 9999;
+                        num18 = item2.maxStack;
                     }
                     num16 -= num18;
                     int num19 = Item.NewItem(item.GetItemSource_Misc(8), (int)item.position.X, (int)item.position.Y, item.width, item.height, item2.type);
